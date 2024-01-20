@@ -1,6 +1,8 @@
 package org.example;
 
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -13,7 +15,7 @@ public class PluginManager {
         this.pluginRootDirectory = pluginRootDirectory;
     }
 
-    public Plugin load(String pluginName, String pluginClassName) {
+    public void load(String pluginName, String pluginClassName) {
         File pluginDir = new File(pluginRootDirectory);
 
         File[] jars = pluginDir.listFiles(file -> file.isFile() && file.getName().endsWith(".jar")
@@ -24,8 +26,13 @@ public class PluginManager {
         for (int i = 0; i < jars.length; i++) {
             try {
                 URL jarURL = jars[i].toURI().toURL();
-                URLClassLoader classLoader = new URLClassLoader(new URL[]{jarURL});
-                pluginClasses[i] = classLoader.loadClass(pluginClassName);
+                // если захотим использовать классы игры, а не пплагинов:
+//                URLClassLoader classLoader = new URLClassLoader(new URL[]{jarURL});
+//                pluginClasses[i] = classLoader.loadClass(pluginClassName);
+
+                // если хотим использовать классы плагинов:
+                CustomClassloader classLoader = new CustomClassloader(new URL[]{jarURL});
+                pluginClasses[i] = classLoader.loadClass(pluginClassName, true);
             } catch (MalformedURLException | ClassNotFoundException e) {
                 e.printStackTrace();
             }
@@ -33,18 +40,13 @@ public class PluginManager {
 
         for (Class clazz : pluginClasses) {
             try { // запустим плагины
-                Plugin instance = (Plugin) clazz.newInstance();
-                instance.doUseful();
-
-                // будем всегда возвращать последний, так как в условии ничего об этом не сказано
-                if (clazz == pluginClasses[pluginClasses.length-1]) {
-                    return instance;
-                }
-            } catch (InstantiationException | IllegalAccessException e) {
+                Object instance = clazz.getDeclaredConstructor().newInstance();
+                Method method = instance.getClass().getMethod("doUseful");
+                method.invoke(instance);
+            } catch (InstantiationException | InvocationTargetException | NoSuchMethodException |
+                     IllegalAccessException e) {
                 e.printStackTrace();
             }
         }
-
-        return null; // если плагинов не оказалось
     }
 }
